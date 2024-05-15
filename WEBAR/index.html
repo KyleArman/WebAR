@@ -1,0 +1,189 @@
+<!--
+    Authors: 
+        Amirah Binti Zulkifli (A20EC0012)
+        Natasya Nadhira Binti Ahmad Nazrain (A20EC0103)
+    Section: 02
+    Date: 16 May 2023
+
+    RTCG - Features Tracking for Web-based AR Application
+-->
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RTCG AR Web-Tracking</title>
+    <link rel="stylesheet" href="styles.css">
+
+    <script src="https://trackingjs.com/bower/tracking.js/build/tracking-min.js"></script>
+    <script src="https://trackingjs.com/bower/dat-gui/build/dat.gui.min.js"></script>
+</head>
+
+<body>
+    <div class="header">
+        <a href="#default" class="logo">Tracking Image with OpenJS</a>
+        <div class="header-right">
+            <a class="active" href="#home">Track Image</a>
+            <a href="#about">About Us</a>
+        </div>
+    </div>
+
+    <div id="center">
+        <p id="status">OpenCV.js is loading...</p>
+    </div>
+    <table>
+        <tr>
+            <th>Source Image                 
+                <img id="src-image" style="width: 300px;"></canvas>
+                <img id="hidden-image" style="display: none;"></canvas>
+            </th>
+            <th>Grayscale Image
+                <canvas id="dest-canvas"></canvas>
+                <canvas id="hidden-canvas" style="display: none;"></canvas>
+            </th>
+            <th>Feature Detection
+                <canvas id="feature-canvas"></canvas>
+                <canvas id="hidden-canvas" style="display: none;"></canvas>
+            </th>
+        </tr>
+        <tr>
+        <td><input type="file" id="input-file" /></td>
+        <td><input type="button" value="Convert To Grayscale" id="gray-scale-btn" /></td>
+        <td><input type="button" onclick="featureDetection()" value="Feature Detection" id="feature-btn" /></td>
+        </tr>
+    </table>
+
+    <div id="center"></div>
+    <div id="result">
+        <p id="result1">Image Result</p>
+        <div id='result-canvas'></div>
+    </div>
+</div>
+
+<div id="center">
+    <div class="button">
+        <button id="save-patt-btn"> Download Pattern (.patt) </button>
+        <button id="save-img-btn"> Download Image (.png) </button>
+            <a href="./camera.html" id="cam">Open Camera</a>
+    </div>
+</div>
+
+
+    <script src="./js/grayscale.js" type="text/javascript"></script>
+    <script src="./js/threex-arpatternfile.js" type="text/javascript"></script>
+    <script async src="./js/opencv.js" onload="onOpenCvReady();" type="text/javascript"></script>
+    <script>
+        var image = null;
+        var innerImageURL = null;
+        var fullMarkerURL = null;
+
+        // upload image
+        function upload() {
+            var fileinput = document.getElementById("input-file");
+            image = new SimpleImage(fileinput);
+        }
+
+        document.querySelector('#input-file').addEventListener('change', function () {
+            var file = this.files[0];
+            imageName = file.name
+            // remove file extension
+            imageName = imageName.substring(0, imageName.lastIndexOf('.')) || imageName
+
+            // debugger
+
+            var reader = new FileReader();
+            reader.onload = function (event) {
+                innerImageURL = event.target.result
+                updateFullMarkerImage()
+            };
+            reader.readAsDataURL(file);
+        })
+
+        // tracking image
+        var gui = new dat.GUI();
+
+        function featureDetection() {
+            window.fastThreshold = 10;
+            var canvas = document.getElementById("feature-canvas");
+            var context = canvas.getContext('2d');
+            var image = document.getElementById('dest-canvas');
+            var width = image.clientWidth;
+            var height = image.clientHeight;
+
+            canvas.width = width;
+            canvas.height = height;
+
+            var findFeature = function () {
+                tracking.Fast.THRESHOLD = window.fastThreshold;;
+                context.drawImage(image, 0, 0, width, height);
+
+                var imageData = context.getImageData(0, 0, width, height);
+                var gray = tracking.Image.grayscale(imageData.data, width, height);
+                var corners = tracking.Fast.findCorners(gray, width, height);
+
+                for (var i = 0; i < corners.length; i += 2) {
+                    context.fillStyle = '#00ffff';
+                    context.fillRect(corners[i], corners[i + 1], 3, 3);
+                }
+            };
+
+            findFeature();
+
+            gui.add(window, 'fastThreshold', 0, 100).onChange(findFeature);
+        }
+
+        // display marker
+        function updateFullMarkerImage() {
+            // get patternRatio
+            var patternRatio = 50 / 100
+            var imageSize = 512
+            var borderColor = 'black'
+
+            THREEx.ArPatternFile.buildFullMarker(innerImageURL, patternRatio, imageSize, borderColor, function onComplete(markerUrl) {
+                fullMarkerURL = markerUrl
+
+                var fullMarkerImage = document.createElement('img')
+                fullMarkerImage.setAttribute('class', "img-fluid");
+                fullMarkerImage.src = fullMarkerURL
+
+                // put fullMarkerImage into #imageContainer
+                var container = document.querySelector('#result-canvas')
+                while (container.firstChild) container.removeChild(container.firstChild);
+                container.appendChild(fullMarkerImage)
+            })
+        }
+
+        // download marker and image
+        document.querySelector('#save-patt-btn').addEventListener('click', function () {
+            if (innerImageURL === null) {
+                alert('Please Upload Image First...')
+                return
+            }
+            console.assert(innerImageURL)
+            THREEx.ArPatternFile.encodeImageURL(innerImageURL, function onComplete(patternFileString) {
+                THREEx.ArPatternFile.triggerDownload(patternFileString, "pattern-marker.patt")
+            })
+        })
+
+
+        document.querySelector('#save-img-btn').addEventListener('click', function () {
+            if (innerImageURL === null) {
+                alert('Please Upload Image First...')
+                return
+            }
+
+            var domElement = window.document.createElement('a');
+            domElement.href = fullMarkerURL;
+            domElement.download = "pattern-" + (imageName || 'marker') + '.png';
+            document.body.appendChild(domElement)
+            domElement.click();
+            document.body.removeChild(domElement)
+        })
+    </script>
+
+</body>
+
+</html>
